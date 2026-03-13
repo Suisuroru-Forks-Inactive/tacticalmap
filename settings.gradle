@@ -1,0 +1,11 @@
+pluginManagement {
+    repositories {
+        // Forge 官方仓库
+        maven { url = 'https://maven.minecraftforge.net/' }
+        // Mixin 插件所在的仓库 (必须包含这个)
+        maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'tacticalmap'

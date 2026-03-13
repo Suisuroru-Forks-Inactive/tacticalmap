@@ -1,0 +1,100 @@
+plugins {
+    id 'net.minecraftforge.gradle' version '6.0.+'
+    id 'org.spongepowered.mixin' version '0.7.+'
+}
+
+group = 'com.flowingsun'
+version = '1.0-SNAPSHOT'
+
+java {
+    archivesBaseName = 'tacticalmap'
+    toolchain.languageVersion = JavaLanguageVersion.of(17)
+}
+
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+
+    runs {
+        client {
+            workingDirectory project.file('run')
+
+            // ✅ 关键：告诉开发环境加载 Mixin 配置文件
+            property 'mixin.config', 'tacticalmap.mixins.json'
+
+            property 'forge.logging.markers', 'REGISTRIES'
+            property 'forge.logging.console.level', 'debug'
+            property 'forge.enabledGameTestNamespaces', 'tacticalmap'
+            mods {
+                tacticalmap {
+                    source sourceSets.main
+                }
+            }
+        }
+        server {
+            workingDirectory project.file('run')
+            property 'mixin.config', 'tacticalmap.mixins.json'
+            property 'forge.logging.markers', 'REGISTRIES'
+            mods {
+                tacticalmap {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+mixin {
+    add sourceSets.main, "tacticalmap.refmap.json"
+    config "tacticalmap.mixins.json"
+}
+
+repositories {
+    ivy {
+        url = uri("${projectDir}/libs")
+        patternLayout { artifact "[artifact].[ext]" }
+        metadataSources { artifact() }
+    }
+    maven { url 'https://maven.aliyun.com/repository/public/' }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.1.0'
+
+    implementation  fg.deobf("local:ftb-chunks-forge-2001.3.6:1.0")
+    implementation  fg.deobf("local:ftb-library-forge-2001.2.12:1.0")
+    implementation  fg.deobf("local:ftb-teams-forge-2001.3.2:1.0")
+    implementation  fg.deobf("local:architectury-9.2.14-forge:1.0")
+    implementation  fg.deobf("local:Ping-Wheel-1.12.1-forge-1.20.1:1.0")
+
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("META-INF/mods.toml") {
+        expand "version": project.version,
+                "loader_version_range": "[47,)",
+                "minecraft_version_range": "[1.20.1,1.21)"
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    manifest {
+        attributes([
+                "Specification-Title"     : "tacticalmap",
+                "Specification-Vendor"    : "flowingsun",
+                "Specification-Version"   : "1",
+                "Implementation-Title"    : project.name,
+                "Implementation-Version"  : project.version,
+                "Implementation-Vendor"   : "flowingsun",
+                "Implementation-Timestamp": new Date().format("yyyy-MM-dd'T'HH:mm:ssZ"),
+                "MixinConfigs": "tacticalmap.mixins.json" // ✅ 确保打包后生效
+        ])
+    }
+    finalizedBy 'reobfJar'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
