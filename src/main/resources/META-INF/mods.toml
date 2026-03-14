@@ -1,7 +1,7 @@
 modLoader = "javafml"
 loaderVersion = "[47,)"
 license = "GPL-3.0"
-issueTrackerURL = "https://github.com/FTBTeam/FTB-Chunks/issues"
+issueTrackerURL = "https://github.com/tacticalmap-dev/tacticalmap/issues"
 
 [[mods]]
 modId = "tacticalmap"
@@ -15,7 +15,7 @@ Enhances FTB Chunks with team-based radar filtering and waypoint synchronization
 [[dependencies.tacticalmap]]
 modId = "forge"
 mandatory = true
-versionRange = "[0,)"
+versionRange = "[47,)"
 ordering = "NONE"
 side = "BOTH"
 
