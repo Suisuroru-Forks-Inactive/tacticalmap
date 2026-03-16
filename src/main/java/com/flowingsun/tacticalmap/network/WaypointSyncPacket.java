@@ -30,7 +30,7 @@ public class WaypointSyncPacket {
      * When minor version updated, the protocol should be something compatible with old version, but not fully supported with new version
      * When patch version updated, the protocol should be fully compatible with old version, but something like text or implementation should be changed
      */
-    private static final String LOCAL_PROTOCOL_VERSION_STRING = "1.0.0";
+    private static final String LOCAL_PROTOCOL_VERSION_STRING = "1.0.1";
     private static final IntList LOCAL_PROTOCOL_VERSION = createProtocolVersion(LOCAL_PROTOCOL_VERSION_STRING); // if you edited this file, you need to bump PROTOCOL_VERSION
 
     private final String name;
@@ -94,6 +94,7 @@ public class WaypointSyncPacket {
         this.sideFlag = sideFlag;
         this.color = color;
         this.protocolVersion = LOCAL_PROTOCOL_VERSION;
+        this.functionEnable = FunctionEnable.FULL; // local function, so no need to check
     }
 
     public void encode(FriendlyByteBuf buf) {
@@ -108,6 +109,9 @@ public class WaypointSyncPacket {
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
+        if (functionEnable.equals(FunctionEnable.UNDEFINE)) {
+            verifyProtocolVersion();
+        }
         if (functionEnable.equals(FunctionEnable.NONE)) return; // 不兼容时，直接禁用
         ctx.get().enqueueWork(() -> {
             ServerPlayer sender = ctx.get().getSender();
