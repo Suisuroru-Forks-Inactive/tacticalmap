@@ -6,6 +6,7 @@ import dev.ftb.mods.ftbchunks.api.FTBChunksAPI;
 import dev.ftb.mods.ftbchunks.api.client.waypoint.Waypoint;
 import dev.ftb.mods.ftbchunks.client.map.WaypointImpl;
 import dev.ftb.mods.ftbchunks.client.map.WaypointManagerImpl;
+import it.unimi.dsi.fastutil.ints.IntList;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerPlayer;
@@ -14,22 +15,31 @@ import net.minecraftforge.network.NetworkEvent;
 import java.util.function.Supplier;
 
 /* class update plan
- * 1. Implement version verification
- * 2. Use BitSet instead of long to send data
+ * 1. Use BitSet instead of long to send data
  */
 public class WaypointSyncPacket {
     private static final int ACTION_BITS = SyncActionGenerator.TOTAL_BITS;
     private static final int ACTION_MASK = SyncActionGenerator.TOTAL_MASK;
     private static final int COLOR_MASK = ~ACTION_MASK;
 
-    private static final int LOCAL_PROTOCOL_VERSION = 1; // if you edited this file, you need to bump PROTOCOL_VERSION
+    /*
+     * If you edited this file, you need to bump LOCAL_PROTOCOL_VERSION_STRING
+     * Version String should adapt this way:
+     * Major.minor.patch
+     * When major version updated, the protocol should fully unsupported with old version
+     * When minor version updated, the protocol should be something compatible with old version, but not fully supported with new version
+     * When patch version updated, the protocol should be fully compatible with old version, but something like text or implementation should be changed
+     */
+    private static final String LOCAL_PROTOCOL_VERSION_STRING = "1.0.0";
+    private static final IntList LOCAL_PROTOCOL_VERSION = createProtocolVersion(LOCAL_PROTOCOL_VERSION_STRING); // if you edited this file, you need to bump PROTOCOL_VERSION
 
     private final String name;
     private final BlockPos pos;
     private final int color;
     private final SyncActionGenerator.SyncAction syncAction;
     private final SyncActionGenerator.SideFlag sideFlag;
-    private final int protocolVersion;
+    private final IntList protocolVersion;
+    private FunctionEnable functionEnable = FunctionEnable.UNDEFINE;
 
     public WaypointSyncPacket(Waypoint wp, byte action) {
         this(wp.getName(), wp.getPos(), ((long) wp.getColor() << ACTION_BITS) | action);
@@ -40,14 +50,30 @@ public class WaypointSyncPacket {
     }
 
     public WaypointSyncPacket(FriendlyByteBuf buf) {
-        this(buf.readUtf(), BlockPos.of(buf.readLong()), buf.readLong(), buf.readInt());
+        this.protocolVersion = buf.readIntIdList();
+        verifyProtocolVersion();
+        if (this.functionEnable.equals(FunctionEnable.NONE)) { // 完全不兼容时，直接禁用，不要读取，防止报错
+            this.name = null;
+            this.pos = null;
+            this.color = -1;
+            this.syncAction = null;
+            this.sideFlag = null;
+            return;
+        }
+        this.name = buf.readUtf();
+        this.pos = BlockPos.of(buf.readLong());
+        long data = buf.readLong();
+        this.color = (int) (data >> ACTION_BITS);
+        byte actionByte = (byte) (data & ACTION_MASK);
+        this.syncAction = SyncActionGenerator.getSyncAction(actionByte);
+        this.sideFlag = SyncActionGenerator.getSideFlag(actionByte);
     }
 
     public WaypointSyncPacket(String name, BlockPos pos, long data) {
-        this(name, pos, data, LOCAL_PROTOCOL_VERSION);
+        this(LOCAL_PROTOCOL_VERSION, name, pos, data);
     }
 
-    public WaypointSyncPacket(String name, BlockPos pos, long data, int protocolVersion) {
+    public WaypointSyncPacket(IntList protocolVersion, String name, BlockPos pos, long data) {
         this.name = name;
         this.pos = pos;
         this.color = (int) (data >> ACTION_BITS);
@@ -71,10 +97,10 @@ public class WaypointSyncPacket {
     }
 
     public void encode(FriendlyByteBuf buf) {
+        buf.writeIntIdList(this.protocolVersion);
         buf.writeUtf(this.name);
         buf.writeLong(this.pos.asLong());
         buf.writeLong(this.encodeData());
-        buf.writeInt(this.protocolVersion);
     }
 
     public WaypointSyncPacket transformToS2C() {
@@ -82,8 +108,8 @@ public class WaypointSyncPacket {
     }
 
     public void handle(Supplier<NetworkEvent.Context> ctx) {
+        if (functionEnable.equals(FunctionEnable.NONE)) return; // 不兼容时，直接禁用
         ctx.get().enqueueWork(() -> {
-
             ServerPlayer sender = ctx.get().getSender();
             if (this.sideFlag.equals(SyncActionGenerator.SideFlag.C2S)) {
                 if (sender != null) {
@@ -129,5 +155,46 @@ public class WaypointSyncPacket {
 
     private long encodeData() {
         return ((long) this.color << ACTION_BITS) | SyncActionGenerator.generate(syncAction, sideFlag);
+    }
+
+    private static IntList createProtocolVersion(String version) {
+        String[] parts = version.split("\\.");
+        int[] intParts = new int[parts.length];
+        for (int i = 0; i < parts.length; i++) {
+            try {
+                intParts[i] = Integer.parseInt(parts[i].trim());
+            } catch (NumberFormatException e) {
+                TacticalMap.LOGGER.error("Invalid version number: {}", parts[i], e);
+                intParts[i] = 0;
+            }
+        }
+        return IntList.of(intParts);
+    }
+
+    private void verifyProtocolVersion() {
+        if (this.protocolVersion.equals(LOCAL_PROTOCOL_VERSION)) {
+            this.functionEnable = FunctionEnable.FULL;
+            return;
+        }
+        for (int i = 0; i < 3; i++) {
+            int local = this.protocolVersion.getInt(i);
+            int remote = LOCAL_PROTOCOL_VERSION.getInt(i);
+            if (local != remote) {
+                switch (i) {
+                    case 0 -> this.functionEnable = FunctionEnable.NONE;
+                    case 1 -> this.functionEnable = FunctionEnable.PARTIAL;
+                    case 2 -> this.functionEnable = FunctionEnable.FULL;
+                }
+                return;
+            }
+        }
+        this.functionEnable = FunctionEnable.FULL;
+    }
+
+    private enum FunctionEnable {
+        FULL,
+        PARTIAL,
+        NONE,
+        UNDEFINE
     }
 }
