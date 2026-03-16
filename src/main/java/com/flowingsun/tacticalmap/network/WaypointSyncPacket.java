@@ -30,12 +30,12 @@ public class WaypointSyncPacket {
      * When minor version updated, the protocol should be something compatible with old version, but not fully supported with new version
      * When patch version updated, the protocol should be fully compatible with old version, but something like text or implementation should be changed
      */
-    private static final String LOCAL_PROTOCOL_VERSION_STRING = "1.0.2";
+    private static final String LOCAL_PROTOCOL_VERSION_STRING = "1.0.3";
     private static final IntList LOCAL_PROTOCOL_VERSION = createProtocolVersion(LOCAL_PROTOCOL_VERSION_STRING); // if you edited this file, you need to bump PROTOCOL_VERSION
 
     private final String name;
     private final BlockPos pos;
-    private final int color;
+    private final Integer color;
     private final SyncActionGenerator.SyncAction syncAction;
     private final SyncActionGenerator.SideFlag sideFlag;
     private final IntList protocolVersion;
@@ -54,7 +54,7 @@ public class WaypointSyncPacket {
         verifyProtocolVersion();
         String name = null;
         BlockPos pos = null;
-        int color = -1;
+        Integer color = null;
         SyncActionGenerator.SyncAction syncAction = null;
         SyncActionGenerator.SideFlag sideFlag = null;
         if (!this.functionEnable.equals(FunctionEnable.NONE)) { // 完全不兼容时，直接禁用，不要读取，防止报错
@@ -141,7 +141,7 @@ public class WaypointSyncPacket {
                             Waypoint wp = impl.addWaypointAt(this.pos, this.name == null ? "null" : this.name);
 
                             // 2. 转换为实现类设置颜色（源码显示 setColor 返回 WaypointImpl，支持链式调用）
-                            if (wp instanceof WaypointImpl wpImpl && this.color != -1) {
+                            if (wp instanceof WaypointImpl wpImpl && this.color != null) {
                                 wpImpl.setColor(color);
                                 // 3. 必须手动刷新图标，否则地图上显示的还是默认颜色
                                 wpImpl.refreshIcon();
